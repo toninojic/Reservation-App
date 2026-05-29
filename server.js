@@ -1,8 +1,10 @@
 require("dotenv").config();
 
 const path = require("path");
+const fs = require("fs");
 const express = require("express");
 const session = require("express-session");
+const SQLiteStoreFactory = require("connect-sqlite3");
 const helmet = require("helmet");
 const morgan = require("morgan");
 
@@ -17,6 +19,10 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
 const sessionSecret = process.env.SESSION_SECRET || "lokalna-dev-tajna-promeni-u-env";
+const sessionDbPath = path.resolve(__dirname, process.env.SESSION_DB_PATH || "./data/sessions.sqlite");
+const sessionDbDir = path.dirname(sessionDbPath);
+const sessionDbFile = path.basename(sessionDbPath);
+const SQLiteStore = SQLiteStoreFactory(session);
 
 if (logger.isProduction && !process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET mora biti podesen u produkciji.");
@@ -25,6 +31,19 @@ if (logger.isProduction && !process.env.SESSION_SECRET) {
 ensureUploadDirectories();
 initDatabase();
 createDefaultAdmin();
+fs.mkdirSync(sessionDbDir, { recursive: true });
+
+const sessionStore = new SQLiteStore({
+  db: sessionDbFile,
+  dir: sessionDbDir,
+  table: "sessions"
+});
+
+if (typeof sessionStore.on === "function") {
+  sessionStore.on("error", (error) => {
+    logger.error(logger.isProduction ? error.message : error.stack || error);
+  });
+}
 
 app.disable("x-powered-by");
 if (logger.isProduction) {
@@ -56,6 +75,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(
   session({
     name: "rezervacije.sid",
+    store: sessionStore,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
