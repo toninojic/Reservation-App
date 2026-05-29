@@ -57,6 +57,9 @@ function cacheElements() {
     roleLabel: document.querySelector("#role-label"),
     workspaceTitle: document.querySelector("#workspace-title"),
     topbarMonthLabel: document.querySelector("#topbar-month-label"),
+    publicAuthActions: document.querySelector("#public-auth-actions"),
+    publicLoginButton: document.querySelector("#public-login-button"),
+    publicRegisterButton: document.querySelector("#public-register-button"),
     userChip: document.querySelector("#user-chip"),
     profileButton: document.querySelector("#profile-button"),
     calendarView: document.querySelector("#calendar-view"),
@@ -111,7 +114,11 @@ function cacheElements() {
 }
 
 function bindEvents() {
-  els.authTabs.forEach((tab) => tab.addEventListener("click", () => switchAuthTab(tab.dataset.authTab)));
+  els.authTabs.forEach((tab) =>
+    tab.addEventListener("click", () => navigateTo(tab.dataset.authTab === "register" ? "/register" : "/login"))
+  );
+  els.publicLoginButton.addEventListener("click", () => navigateTo("/login"));
+  els.publicRegisterButton.addEventListener("click", () => navigateTo("/register"));
   els.loginForm.addEventListener("submit", handleLogin);
   els.registerForm.addEventListener("submit", handleRegister);
   els.profileButton.addEventListener("click", showProfileView);
@@ -176,6 +183,9 @@ function bindEvents() {
       closeUserModal();
     }
   });
+  window.addEventListener("popstate", () => {
+    applyRoute();
+  });
 }
 
 async function api(path, options = {}) {
@@ -201,47 +211,152 @@ async function checkSession() {
   try {
     const data = await api("/api/auth/me");
     state.user = data.user;
-    showApp();
   } catch (err) {
-    showAuth();
+    state.user = null;
   }
+
+  await applyRoute();
 }
 
-function showAuth() {
-  els.authScreen.hidden = false;
-  els.appShell.hidden = true;
-  setMessage(els.authMessage, "");
+function normalizeRoutePath(pathname) {
+  const cleanPath = pathname.replace(/\/+$/, "") || "/";
+  const knownRoutes = new Set(["/", "/login", "/register", "/dashboard", "/admin"]);
+  return knownRoutes.has(cleanPath) ? cleanPath : "/";
 }
 
-async function showApp() {
-  els.authScreen.hidden = true;
-  els.appShell.hidden = false;
-  renderUserChip();
+function navigateTo(path, options = {}) {
+  const normalizedPath = normalizeRoutePath(path);
+  const method = options.replace ? "replaceState" : "pushState";
 
-  if (state.user.role === "admin") {
-    els.roleLabel.textContent = "Admin panel";
-    els.workspaceTitle.textContent = "Upravljanje rezervacijama";
-    els.topbarMonthLabel.textContent = "Admin panel";
-    els.calendarView.hidden = true;
-    els.profileView.hidden = true;
-    els.adminView.hidden = false;
-    els.profileButton.hidden = true;
-    await loadAdminData();
+  if (window.location.pathname !== normalizedPath) {
+    window.history[method]({}, "", normalizedPath);
+  } else if (options.replace) {
+    window.history.replaceState({}, "", normalizedPath);
+  }
+
+  return applyRoute();
+}
+
+async function applyRoute() {
+  const path = normalizeRoutePath(window.location.pathname);
+
+  if (path !== window.location.pathname) {
+    window.history.replaceState({}, "", path);
+  }
+
+  if ((path === "/login" || path === "/register") && state.user) {
+    await navigateTo(state.user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
     return;
   }
 
+  if (path === "/login" || path === "/register") {
+    showAuth(path === "/register" ? "register" : "login");
+    return;
+  }
+
+  if (path === "/admin") {
+    if (!state.user) {
+      await navigateTo("/login", { replace: true });
+      return;
+    }
+
+    if (state.user.role !== "admin") {
+      showToast("Nemate pristup admin panelu.");
+      await navigateTo("/dashboard", { replace: true });
+      return;
+    }
+
+    await showAdminView();
+    return;
+  }
+
+  if (path === "/dashboard") {
+    if (!state.user) {
+      await navigateTo("/login", { replace: true });
+      return;
+    }
+
+    if (state.user && state.user.role === "admin") {
+      await navigateTo("/admin", { replace: true });
+      return;
+    }
+
+    await showOrganizationCalendar();
+    return;
+  }
+
+  if (state.user) {
+    await navigateTo(state.user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
+    return;
+  }
+
+  await showPublicCalendar();
+}
+
+function showAuth(tabName = "login") {
+  els.authScreen.hidden = false;
+  els.appShell.hidden = true;
+  switchAuthTab(tabName, { updateRoute: false });
+  setMessage(els.authMessage, "");
+}
+
+async function showPublicCalendar() {
+  els.authScreen.hidden = true;
+  els.appShell.hidden = false;
+  els.publicAuthActions.hidden = false;
+  els.userChip.hidden = true;
+  els.userChip.innerHTML = "";
+  els.logoutButton.hidden = true;
+  els.profileButton.hidden = true;
+  els.roleLabel.textContent = "Javni kalendar";
+  els.workspaceTitle.textContent = "Rezervacije";
+  els.adminView.hidden = true;
+  els.profileView.hidden = true;
+  els.calendarView.hidden = false;
+  setupCalendarControls();
+  await loadEvents();
+}
+
+async function showAdminView() {
+  els.authScreen.hidden = true;
+  els.appShell.hidden = false;
+  els.publicAuthActions.hidden = true;
+  els.userChip.hidden = false;
+  els.logoutButton.hidden = false;
+  els.profileButton.hidden = true;
+  renderUserChip();
+  els.roleLabel.textContent = "Admin panel";
+  els.workspaceTitle.textContent = "Upravljanje rezervacijama";
+  els.topbarMonthLabel.textContent = "Admin panel";
+  els.calendarView.hidden = true;
+  els.profileView.hidden = true;
+  els.adminView.hidden = false;
+  await loadAdminData();
+}
+
+async function showOrganizationCalendar() {
+  els.authScreen.hidden = true;
+  els.appShell.hidden = false;
+  els.publicAuthActions.hidden = true;
+  els.userChip.hidden = false;
+  els.logoutButton.hidden = false;
+  els.profileButton.hidden = false;
+  renderUserChip();
   els.roleLabel.textContent = "Kalendar";
   els.workspaceTitle.textContent = state.user.organization_name;
   els.adminView.hidden = true;
   els.profileView.hidden = true;
   els.calendarView.hidden = false;
-  els.profileButton.hidden = false;
   setupCalendarControls();
   await loadEvents();
 }
 
 function renderUserChip() {
   els.userChip.innerHTML = "";
+
+  if (!state.user) {
+    return;
+  }
 
   if (state.user.logo_path) {
     const logo = document.createElement("img");
@@ -339,10 +454,13 @@ async function handleProfileSubmit(event) {
   }
 }
 
-function switchAuthTab(tabName) {
+function switchAuthTab(tabName, options = {}) {
   els.authTabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.authTab === tabName));
   els.loginForm.classList.toggle("is-hidden", tabName !== "login");
   els.registerForm.classList.toggle("is-hidden", tabName !== "register");
+  if (options.updateRoute !== false) {
+    window.history.replaceState({}, "", tabName === "register" ? "/register" : "/login");
+  }
   setMessage(els.authMessage, "");
 }
 
@@ -357,7 +475,7 @@ async function handleLogin(event) {
     });
     state.user = data.user;
     els.loginForm.reset();
-    await showApp();
+    await navigateTo(state.user.role === "admin" ? "/admin" : "/dashboard", { replace: true });
   } catch (err) {
     setMessage(els.authMessage, err.message, "error");
   }
@@ -373,7 +491,7 @@ async function handleRegister(event) {
       body: new FormData(els.registerForm)
     });
     els.registerForm.reset();
-    switchAuthTab("login");
+    await navigateTo("/login", { replace: true });
     setMessage(els.authMessage, data.message || "Nalog čeka odobrenje.", "success");
   } catch (err) {
     setMessage(els.authMessage, err.message, "error");
@@ -384,7 +502,8 @@ async function handleLogout() {
   await api("/api/auth/logout", { method: "POST" }).catch(() => {});
   state.user = null;
   state.events = [];
-  showAuth();
+  state.users = [];
+  await navigateTo("/", { replace: true });
 }
 
 function setupCalendarControls() {
@@ -480,7 +599,7 @@ function renderCalendar() {
 
     if (event) {
       classes.push("is-reserved");
-      if (event.user_id === state.user.id) {
+      if (state.user && event.user_id === state.user.id) {
         classes.push("is-own");
       }
     }
@@ -513,11 +632,11 @@ function renderCalendar() {
 }
 
 function getCalendarStatus(event, dateKey, todayKey) {
-  if (event && event.user_id === state.user.id) {
+  if (event && state.user && event.user_id === state.user.id) {
     return "mine";
   }
 
-  if (event && event.user_id && event.user_id !== state.user.id) {
+  if (event && state.user && event.user_id && event.user_id !== state.user.id) {
     return "other";
   }
 
@@ -742,6 +861,8 @@ function openDate(dateKey) {
 
   if (event) {
     showEventDetails(event);
+  } else if (!state.user) {
+    showPublicReservationPrompt(dateKey);
   } else {
     showEventForm({
       event_date: dateKey,
@@ -757,6 +878,48 @@ function openDate(dateKey) {
   }
 }
 
+function showPublicReservationPrompt(dateKey) {
+  state.modalEvent = null;
+  state.modalMode = "public";
+  els.eventForm.hidden = true;
+  els.eventDetails.hidden = false;
+  els.eventMessage.textContent = "";
+  els.modalTitle.textContent = "Rezervacija datuma";
+  els.modalDateLabel.textContent = formatDisplayDate(dateKey);
+  els.eventDetails.innerHTML = `
+    <div class="description-box public-lock-message">
+      Morate biti prijavljeni da biste rezervisali datum.
+    </div>
+    <div class="modal-actions">
+      <button class="primary-button" type="button" data-action="login">Prijavi se</button>
+      <button class="ghost-button" type="button" data-action="register">Registruj se</button>
+      <button class="ghost-button" type="button" data-action="close">Zatvori</button>
+    </div>
+  `;
+
+  els.eventDetails.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", () => handlePublicPromptAction(button.dataset.action));
+  });
+
+  els.eventModal.hidden = false;
+}
+
+async function handlePublicPromptAction(action) {
+  if (action === "login") {
+    closeModal();
+    await navigateTo("/login");
+    return;
+  }
+
+  if (action === "register") {
+    closeModal();
+    await navigateTo("/register");
+    return;
+  }
+
+  closeModal();
+}
+
 function showEventDetails(event) {
   state.modalEvent = event;
   state.modalMode = "view";
@@ -767,7 +930,7 @@ function showEventDetails(event) {
   els.eventMessage.textContent = "";
 
   const imagePath = event.logo_path || event.flyer_path;
-  const canManage = state.user.role === "admin" || event.user_id === state.user.id;
+  const canManage = state.user && (state.user.role === "admin" || event.user_id === state.user.id);
   const heroMedia =
     imagePath && imagePath === event.flyer_path
       ? `<button class="media-button" type="button" data-action="flyer" aria-label="Otvori flajer">
@@ -885,6 +1048,11 @@ async function handleModalAction(action, event) {
 async function handleEventSubmit(event) {
   event.preventDefault();
   setMessage(els.eventMessage, "");
+  if (!state.user) {
+    setMessage(els.eventMessage, "Morate biti prijavljeni da biste rezervisali datum.", "error");
+    return;
+  }
+
   const formData = new FormData(els.eventForm);
   const id = formData.get("id");
   if (!formData.get("remove_flyer")) {
@@ -897,7 +1065,7 @@ async function handleEventSubmit(event) {
     const data = await api(path, { method, body: formData });
     closeModal();
     showToast(data.message || "Sačuvano.");
-    if (state.user.role === "admin") {
+    if (state.user && state.user.role === "admin") {
       await loadAdminData();
     } else {
       await loadEvents();
@@ -908,6 +1076,11 @@ async function handleEventSubmit(event) {
 }
 
 async function deleteEvent(id) {
+  if (!state.user) {
+    showToast("Morate biti prijavljeni da biste menjali rezervacije.");
+    return;
+  }
+
   if (!window.confirm("Da li ste sigurni da želite da obrišete ovu rezervaciju?")) {
     return;
   }
@@ -916,7 +1089,7 @@ async function deleteEvent(id) {
     const data = await api(`/api/events/${id}`, { method: "DELETE" });
     closeModal();
     showToast(data.message || "Obrisano.");
-    if (state.user.role === "admin") {
+    if (state.user && state.user.role === "admin") {
       await loadAdminData();
     } else {
       await loadEvents();
