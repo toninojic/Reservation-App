@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const { getDb } = require("../db/database");
 const { deleteUploadedFile, fileToPublicPath } = require("../utils/uploads");
 const { findSessionUser } = require("../middleware/auth");
+const { isPlainObject, isValidEmail, isValidPassword, normalizeText } = require("../utils/validation");
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -23,7 +24,12 @@ function publicUser(user) {
 }
 
 function register(req, res) {
-  const organizationName = String(req.body.organization_name || "").trim();
+  if (!isPlainObject(req.body)) {
+    deleteUploadedFile(fileToPublicPath(req.file));
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
+  const organizationName = normalizeText(req.body.organization_name, 160);
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || "");
   const logoPath = fileToPublicPath(req.file);
@@ -33,14 +39,19 @@ function register(req, res) {
     return res.status(400).json({ message: "Naziv organizacije, email i lozinka su obavezni." });
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (organizationName.length > 160) {
+    deleteUploadedFile(logoPath);
+    return res.status(400).json({ message: "Naziv organizacije može imati najviše 160 karaktera." });
+  }
+
+  if (!isValidEmail(email)) {
     deleteUploadedFile(logoPath);
     return res.status(400).json({ message: "Unesite ispravnu email adresu." });
   }
 
-  if (password.length < 8) {
+  if (!isValidPassword(password)) {
     deleteUploadedFile(logoPath);
-    return res.status(400).json({ message: "Lozinka mora imati najmanje 8 karaktera." });
+    return res.status(400).json({ message: "Lozinka mora imati između 8 i 128 karaktera." });
   }
 
   const database = getDb();
@@ -66,6 +77,10 @@ function register(req, res) {
 }
 
 function login(req, res) {
+  if (!isPlainObject(req.body)) {
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || "");
 
@@ -73,7 +88,21 @@ function login(req, res) {
     return res.status(400).json({ message: "Email i lozinka su obavezni." });
   }
 
-  const user = getDb().prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: "Unesite ispravnu email adresu." });
+  }
+
+  if (password.length > 128) {
+    return res.status(400).json({ message: "Lozinka nije ispravna." });
+  }
+
+  const user = getDb()
+    .prepare(
+      `SELECT id, organization_name, email, logo_path, role, status, password_hash
+       FROM users
+       WHERE email = ?`
+    )
+    .get(email);
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ message: "Pogrešan email ili lozinka." });
@@ -119,7 +148,13 @@ function updateProfile(req, res) {
     return res.status(403).json({ message: "Samo organizacije mogu menjati profil." });
   }
 
-  const organizationName = String(req.body.organization_name || "").trim();
+  if (!isPlainObject(req.body)) {
+    const uploadedLogoPath = fileToPublicPath(req.file);
+    deleteUploadedFile(uploadedLogoPath);
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
+  const organizationName = normalizeText(req.body.organization_name, 160);
   const newLogoPath = fileToPublicPath(req.file);
 
   if (!organizationName) {
@@ -133,7 +168,7 @@ function updateProfile(req, res) {
   }
 
   const database = getDb();
-  const existing = database.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+  const existing = database.prepare("SELECT id, logo_path FROM users WHERE id = ?").get(req.user.id);
 
   if (!existing) {
     deleteUploadedFile(newLogoPath);

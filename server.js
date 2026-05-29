@@ -5,25 +5,35 @@ const express = require("express");
 const session = require("express-session");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
 
 const { initDatabase, createDefaultAdmin } = require("./src/db/database");
 const authRoutes = require("./src/routes/authRoutes");
 const eventRoutes = require("./src/routes/eventRoutes");
 const adminRoutes = require("./src/routes/adminRoutes");
 const { ensureUploadDirectories } = require("./src/utils/uploads");
+const logger = require("./src/utils/logger");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
+const sessionSecret = process.env.SESSION_SECRET || "lokalna-dev-tajna-promeni-u-env";
+
+if (logger.isProduction && !process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET mora biti podesen u produkciji.");
+}
 
 ensureUploadDirectories();
 initDatabase();
 createDefaultAdmin();
 
 app.disable("x-powered-by");
+if (logger.isProduction) {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   helmet({
+    referrerPolicy: { policy: "no-referrer" },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -35,14 +45,18 @@ app.use(
     }
   })
 );
-app.use(morgan("dev"));
+
+if (!logger.isProduction) {
+  app.use(morgan("dev"));
+}
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use(
   session({
     name: "rezervacije.sid",
-    secret: process.env.SESSION_SECRET || "lokalna-dev-tajna-promeni-u-env",
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -54,14 +68,7 @@ app.use(
   })
 );
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 80,
-  standardHeaders: "draft-7",
-  legacyHeaders: false
-});
-
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/admin", adminRoutes);
 
@@ -80,10 +87,17 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ message: err.message.replace("UPLOAD_", "") });
   }
 
-  console.error(err);
-  return res.status(500).json({ message: "Došlo je do greške na serveru." });
+  logger.error(logger.isProduction ? err.message : err.stack || err);
+
+  const response = { message: "Došlo je do greške na serveru." };
+  if (!logger.isProduction) {
+    response.error = err.message;
+    response.stack = err.stack;
+  }
+
+  return res.status(500).json(response);
 });
 
 app.listen(port, () => {
-  console.log(`Rezervacija kalendar radi na http://localhost:${port}`);
+  logger.info(`Rezervacija kalendar radi na http://localhost:${port}`);
 });
