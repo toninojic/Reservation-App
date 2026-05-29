@@ -56,6 +56,7 @@ function cacheElements() {
     logoutButton: document.querySelector("#logout-button"),
     roleLabel: document.querySelector("#role-label"),
     workspaceTitle: document.querySelector("#workspace-title"),
+    topbarMonthLabel: document.querySelector("#topbar-month-label"),
     userChip: document.querySelector("#user-chip"),
     profileButton: document.querySelector("#profile-button"),
     calendarView: document.querySelector("#calendar-view"),
@@ -71,6 +72,8 @@ function cacheElements() {
     calendarGrid: document.querySelector("#calendar-grid"),
     calendarPanel: document.querySelector(".calendar-panel"),
     upcomingEvents: document.querySelector("#upcoming-events"),
+    todayEventsWidget: document.querySelector("#today-events-widget"),
+    todayEvents: document.querySelector("#today-events"),
     profileForm: document.querySelector("#profile-form"),
     profileLogoInput: document.querySelector("#profile-logo-input"),
     profileLogoPreview: document.querySelector("#profile-logo-preview"),
@@ -218,6 +221,7 @@ async function showApp() {
   if (state.user.role === "admin") {
     els.roleLabel.textContent = "Admin panel";
     els.workspaceTitle.textContent = "Upravljanje rezervacijama";
+    els.topbarMonthLabel.textContent = "Admin panel";
     els.calendarView.hidden = true;
     els.profileView.hidden = true;
     els.adminView.hidden = false;
@@ -256,6 +260,7 @@ function showCalendarView() {
   els.calendarView.hidden = false;
   els.roleLabel.textContent = "Kalendar";
   els.workspaceTitle.textContent = state.user.organization_name;
+  els.topbarMonthLabel.textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
   setMessage(els.profileMessage, "");
   renderCalendar();
 }
@@ -267,6 +272,7 @@ function showProfileView() {
   els.profileView.hidden = false;
   els.roleLabel.textContent = "Podešavanja profila";
   els.workspaceTitle.textContent = state.user.organization_name;
+  els.topbarMonthLabel.textContent = "Podešavanja profila";
 }
 
 function renderProfileForm() {
@@ -451,6 +457,7 @@ function renderCalendar() {
 
   els.monthSelect.value = String(state.currentMonth);
   els.yearSelect.value = String(state.currentYear);
+  els.topbarMonthLabel.textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
   els.mobileMonthLabel.textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
 
   for (let i = 0; i < leadingEmpty; i += 1) {
@@ -461,6 +468,7 @@ function renderCalendar() {
     const dateKey = formatDate(new Date(state.currentYear, state.currentMonth, day));
     const event = eventsByDate.get(dateKey);
     const classes = ["day-cell"];
+    const statusDots = renderCalendarStatusDots(event, dateKey, today);
 
     if (dateKey === today) {
       classes.push("is-today");
@@ -481,7 +489,10 @@ function renderCalendar() {
       <button class="${classes.join(" ")}" type="button" data-date="${dateKey}" title="${escapeHtml(
         event ? event.event_name : "Rezerviši datum"
       )}">
-        <span class="day-number">${day}</span>
+        <span class="day-cell-top">
+          <span class="day-number">${day}</span>
+          <span class="date-status-dots" aria-hidden="true">${statusDots}</span>
+        </span>
         ${event ? renderEventPreview(event) : '<span class="day-free">Slobodno</span>'}
       </button>
     `);
@@ -501,27 +512,63 @@ function renderCalendar() {
   updateMonthButtons();
 }
 
+function getCalendarStatus(event, dateKey, todayKey) {
+  if (event && event.user_id === state.user.id) {
+    return "mine";
+  }
+
+  if (event && event.user_id && event.user_id !== state.user.id) {
+    return "other";
+  }
+
+  if (event) {
+    return "reserved";
+  }
+
+  if (dateKey === todayKey) {
+    return "today";
+  }
+
+  return "free";
+}
+
+function renderCalendarStatusDots(event, dateKey, todayKey) {
+  const status = getCalendarStatus(event, dateKey, todayKey);
+  const dots = [`<i class="status-dot status-dot--${status}"></i>`];
+
+  if (dateKey === todayKey && status !== "today") {
+    dots.push('<i class="status-dot status-dot--today status-dot--secondary"></i>');
+  }
+
+  return dots.join("");
+}
+
 function renderUpcomingEvents() {
   const today = startOfDay(new Date());
   const lastDay = addDays(today, 6);
+  const todayKey = formatDate(today);
   const upcoming = state.events
     .filter((event) => {
       const eventDate = dateFromKey(event.event_date);
       return eventDate >= today && eventDate <= lastDay;
     })
     .sort((a, b) => a.event_date.localeCompare(b.event_date) || a.start_time.localeCompare(b.start_time));
+  const todayEvents = upcoming.filter((event) => event.event_date === todayKey);
+  const futureUpcoming = upcoming.filter((event) => event.event_date > todayKey);
 
-  if (!upcoming.length) {
+  renderTodayEvents(todayEvents);
+
+  if (!futureUpcoming.length) {
     els.upcomingEvents.innerHTML = `
       <div class="empty-upcoming">
-        <strong>Nema zakazanih događaja.</strong>
-        <span>Sledećih 7 dana je slobodno za nove rezervacije.</span>
+        <strong>Nema predstojećih događaja.</strong>
+        <span>Narednih 7 dana nema budućih rezervacija.</span>
       </div>
     `;
     return;
   }
 
-  els.upcomingEvents.innerHTML = upcoming
+  els.upcomingEvents.innerHTML = futureUpcoming
     .map(
       (event) => `
         <button class="upcoming-card" type="button" data-date="${event.event_date}">
@@ -536,6 +583,33 @@ function renderUpcomingEvents() {
     .join("");
 
   els.upcomingEvents.querySelectorAll("[data-date]").forEach((button) => {
+    button.addEventListener("click", () => openDate(button.dataset.date));
+  });
+}
+
+function renderTodayEvents(events) {
+  if (!events.length) {
+    els.todayEventsWidget.hidden = true;
+    els.todayEvents.innerHTML = "";
+    return;
+  }
+
+  els.todayEventsWidget.hidden = false;
+  els.todayEvents.innerHTML = events
+    .map(
+      (event) => `
+        <button class="today-event-card" type="button" data-date="${event.event_date}">
+          <span class="today-badge">Danas</span>
+          <strong>${escapeHtml(event.event_name)}</strong>
+          <span>${escapeHtml(event.start_time)} - ${escapeHtml(event.end_time)}</span>
+          <span>${escapeHtml(event.location)}</span>
+          <em>${escapeHtml(event.organization_name || "Organizacija")}</em>
+        </button>
+      `
+    )
+    .join("");
+
+  els.todayEvents.querySelectorAll("[data-date]").forEach((button) => {
     button.addEventListener("click", () => openDate(button.dataset.date));
   });
 }
