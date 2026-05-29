@@ -56,50 +56,82 @@
 
     <main id="app-shell" class="app-shell" hidden>
       <header class="topbar">
-        <div>
-          <p class="eyebrow" id="role-label">Kalendar</p>
-          <h1 id="workspace-title">Rezervacije</h1>
-        </div>
-        <div class="topbar-actions">
-          <div id="user-chip" class="user-chip"></div>
-          <button id="profile-button" class="ghost-button" type="button" hidden>Podešavanja profila</button>
-          <button id="logout-button" class="ghost-button" type="button">Odjava</button>
+        <div class="topbar-inner">
+          <div class="topbar-brand">
+            <div class="app-logo" aria-hidden="true">RK</div>
+            <div>
+              <p class="app-title">Rezervacija datuma</p>
+              <p class="topbar-subtitle" id="role-label">Kalendar</p>
+            </div>
+          </div>
+
+          <div class="topbar-context" aria-live="polite">
+            <span id="topbar-month-label">Kalendar</span>
+            <small id="workspace-title">Rezervacije</small>
+          </div>
+
+          <div class="topbar-actions">
+            <div id="user-chip" class="user-chip"></div>
+            <button id="profile-button" class="ghost-button" type="button" hidden>Podešavanja profila</button>
+            <button id="logout-button" class="ghost-button" type="button">Odjava</button>
+          </div>
         </div>
       </header>
 
       <section id="calendar-view" class="workspace" hidden>
-        <div class="calendar-toolbar">
-          <button id="previous-month" class="icon-button" type="button" aria-label="Prethodni mesec" title="Prethodni mesec">‹</button>
-          <div class="month-selectors">
-            <select id="month-select" aria-label="Mesec"></select>
-            <select id="year-select" aria-label="Godina"></select>
-          </div>
-          <button id="today-button" class="today-button" type="button">Danas</button>
-          <button id="next-month" class="icon-button" type="button" aria-label="Sledeći mesec" title="Sledeći mesec">›</button>
-        </div>
-        <div id="mobile-month-label" class="mobile-month-label" aria-live="polite"></div>
-
-        <div class="calendar-legend" aria-label="Legenda kalendara">
-          <span><i class="legend-dot free"></i> Slobodno</span>
-          <span><i class="legend-dot reserved"></i> Rezervisano</span>
-          <span><i class="legend-dot own"></i> Vaša rezervacija</span>
-        </div>
-
         <div class="calendar-layout">
           <aside class="upcoming-sidebar" aria-labelledby="upcoming-title">
-            <div class="section-heading compact-heading">
-              <div>
+            <section id="today-events-widget" class="sidebar-widget today-widget" aria-labelledby="today-events-title" hidden>
+              <div class="sidebar-widget-heading">
+                <p class="eyebrow">Danas</p>
+                <h2 id="today-events-title">Današnji događaji</h2>
+              </div>
+              <div id="today-events" class="today-events-list"></div>
+            </section>
+
+            <section class="sidebar-widget" aria-labelledby="upcoming-title">
+              <div class="sidebar-widget-heading">
                 <p class="eyebrow">Narednih 7 dana</p>
                 <h2 id="upcoming-title">Predstojeći događaji</h2>
               </div>
-            </div>
-            <div id="upcoming-events" class="upcoming-list"></div>
+              <div id="upcoming-events" class="upcoming-list"></div>
+            </section>
+
+            <details class="sidebar-widget legend-accordion" aria-label="Legenda kalendara">
+              <summary class="legend-summary">
+                <span>
+                  <small class="eyebrow">Legenda</small>
+                  <strong>Stanja u kalendaru</strong>
+                </span>
+                <i class="legend-chevron" aria-hidden="true"></i>
+              </summary>
+              <div class="calendar-legend legend-content">
+                <span><i class="status-dot status-dot--free"></i> Slobodan datum</span>
+                <span><i class="status-dot status-dot--reserved"></i> Rezervisan datum</span>
+                <span><i class="status-dot status-dot--today"></i> Današnji datum</span>
+                <span><i class="status-dot status-dot--mine"></i> Moja rezervacija</span>
+                <span><i class="status-dot status-dot--other"></i> Druga organizacija</span>
+              </div>
+            </details>
           </aside>
 
-          <section class="calendar-panel">
-            <div class="weekday-grid" id="weekday-grid"></div>
-            <div class="calendar-grid" id="calendar-grid"></div>
-          </section>
+          <div class="calendar-main">
+            <div class="calendar-toolbar">
+              <button id="previous-month" class="icon-button" type="button" aria-label="Prethodni mesec" title="Prethodni mesec">‹</button>
+              <div class="month-selectors">
+                <select id="month-select" aria-label="Mesec"></select>
+                <select id="year-select" aria-label="Godina"></select>
+              </div>
+              <button id="today-button" class="today-button" type="button">Danas</button>
+              <button id="next-month" class="icon-button" type="button" aria-label="Sledeći mesec" title="Sledeći mesec">›</button>
+            </div>
+            <div id="mobile-month-label" class="mobile-month-label" aria-live="polite"></div>
+
+            <section class="calendar-panel">
+              <div class="weekday-grid" id="weekday-grid"></div>
+              <div class="calendar-grid" id="calendar-grid"></div>
+            </section>
+          </div>
         </div>
       </section>
 
