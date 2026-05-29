@@ -1,0 +1,9 @@
+node_modules/
+.env
+data/*.sqlite
+data/*.sqlite-*
+public/uploads/logos/*
+public/uploads/flyers/*
+!public/uploads/logos/.gitkeep
+!public/uploads/flyers/.gitkeep
+npm-debug.log*

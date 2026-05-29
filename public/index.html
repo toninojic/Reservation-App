@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rezervacija datuma</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main id="auth-screen" class="auth-screen" hidden>
+      <section class="auth-card" aria-label="Prijava i registracija">
+        <div class="brand-mark">
+          <span>RK</span>
+        </div>
+        <h1>Rezervacija datuma</h1>
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab is-active" type="button" data-auth-tab="login">Prijava</button>
+          <button class="auth-tab" type="button" data-auth-tab="register">Registracija</button>
+        </div>
+
+        <form id="login-form" class="auth-form" autocomplete="on">
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Lozinka
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-button" type="submit">Prijava</button>
+        </form>
+
+        <form id="register-form" class="auth-form is-hidden" enctype="multipart/form-data">
+          <label>
+            Naziv organizacije
+            <input name="organization_name" type="text" maxlength="160" required />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Lozinka
+            <input name="password" type="password" minlength="8" autocomplete="new-password" required />
+          </label>
+          <label>
+            Logo organizacije
+            <input name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+          </label>
+          <button class="primary-button" type="submit">Registracija</button>
+        </form>
+
+        <p id="auth-message" class="message" role="status"></p>
+      </section>
+    </main>
+
+    <main id="app-shell" class="app-shell" hidden>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="role-label">Kalendar</p>
+          <h1 id="workspace-title">Rezervacije</h1>
+        </div>
+        <div class="topbar-actions">
+          <div id="user-chip" class="user-chip"></div>
+          <button id="profile-button" class="ghost-button" type="button" hidden>Podešavanja profila</button>
+          <button id="logout-button" class="ghost-button" type="button">Odjava</button>
+        </div>
+      </header>
+
+      <section id="calendar-view" class="workspace" hidden>
+        <div class="calendar-toolbar">
+          <button id="previous-month" class="icon-button" type="button" aria-label="Prethodni mesec" title="Prethodni mesec">‹</button>
+          <div class="month-selectors">
+            <select id="month-select" aria-label="Mesec"></select>
+            <select id="year-select" aria-label="Godina"></select>
+          </div>
+          <button id="today-button" class="today-button" type="button">Danas</button>
+          <button id="next-month" class="icon-button" type="button" aria-label="Sledeći mesec" title="Sledeći mesec">›</button>
+        </div>
+        <div id="mobile-month-label" class="mobile-month-label" aria-live="polite"></div>
+
+        <div class="calendar-legend" aria-label="Legenda kalendara">
+          <span><i class="legend-dot free"></i> Slobodno</span>
+          <span><i class="legend-dot reserved"></i> Rezervisano</span>
+          <span><i class="legend-dot own"></i> Vaša rezervacija</span>
+        </div>
+
+        <div class="calendar-layout">
+          <aside class="upcoming-sidebar" aria-labelledby="upcoming-title">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">Narednih 7 dana</p>
+                <h2 id="upcoming-title">Predstojeći događaji</h2>
+              </div>
+            </div>
+            <div id="upcoming-events" class="upcoming-list"></div>
+          </aside>
+
+          <section class="calendar-panel">
+            <div class="weekday-grid" id="weekday-grid"></div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="profile-view" class="workspace profile-workspace" hidden>
+        <section class="profile-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Organizacija</p>
+              <h2>Podešavanja profila</h2>
+            </div>
+            <button id="back-to-calendar" class="ghost-button" type="button">Kalendar</button>
+          </div>
+
+          <form id="profile-form" class="profile-form" enctype="multipart/form-data">
+            <div class="profile-preview">
+              <img id="profile-logo-preview" src="" alt="Logo organizacije" hidden />
+              <div id="profile-logo-placeholder" class="brand-mark"><span>RK</span></div>
+            </div>
+
+            <label>
+              Naziv organizacije
+              <input name="organization_name" type="text" maxlength="160" required />
+            </label>
+
+            <label>
+              Logo organizacije
+              <input id="profile-logo-input" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+            </label>
+
+            <div class="locked-profile-grid" aria-label="Zaključana polja profila">
+              <div class="detail-item">
+                <span>Email</span>
+                <p id="profile-email"></p>
+              </div>
+              <div class="detail-item">
+                <span>Status</span>
+                <p id="profile-status"></p>
+              </div>
+            </div>
+
+            <div class="modal-actions">
+              <button class="primary-button" type="submit">Sačuvaj izmene</button>
+              <button id="cancel-profile-edit" class="ghost-button" type="button">Otkaži</button>
+            </div>
+            <p id="profile-message" class="message" role="status"></p>
+          </form>
+        </section>
+      </section>
+
+      <section id="admin-view" class="workspace admin-workspace" hidden>
+        <div class="admin-grid">
+          <section class="admin-panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Nalozi</p>
+                <h2>Organizacije</h2>
+              </div>
+              <span id="pending-count" class="count-pill">0 na čekanju</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Organizacija</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Rezervacije</th>
+                    <th>Akcije</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Događaji</p>
+                <h2>Sve rezervacije</h2>
+              </div>
+              <span id="event-count" class="count-pill">0 događaja</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Događaj</th>
+                    <th>Organizacija</th>
+                    <th>Vreme</th>
+                    <th>Lokacija</th>
+                    <th>Akcije</th>
+                  </tr>
+                </thead>
+                <tbody id="events-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="event-modal" class="modal-backdrop" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button id="modal-close" class="modal-close" type="button" aria-label="Zatvori" title="Zatvori">×</button>
+        <div class="modal-header">
+          <p class="eyebrow" id="modal-date-label"></p>
+          <h2 id="modal-title">Rezerviši datum</h2>
+        </div>
+
+        <div id="event-details" class="event-details"></div>
+
+        <form id="event-form" class="event-form" enctype="multipart/form-data" hidden>
+          <input name="id" type="hidden" />
+          <label>
+            Datum
+            <input name="event_date" type="date" required />
+          </label>
+          <label>
+            Naziv događaja
+            <input name="event_name" type="text" maxlength="160" required />
+          </label>
+          <div class="form-row">
+            <label>
+              Vreme početka
+              <input name="start_time" type="time" required />
+            </label>
+            <label>
+              Vreme završetka
+              <input name="end_time" type="time" required />
+            </label>
+          </div>
+          <label>
+            Lokacija
+            <input name="location" type="text" maxlength="160" required />
+          </label>
+          <div class="form-row">
+            <label>
+              Kontakt osoba
+              <input name="contact_person" type="text" maxlength="120" />
+            </label>
+            <label>
+              Telefon
+              <input name="phone" type="tel" maxlength="40" />
+            </label>
+          </div>
+          <label>
+            Opis
+            <textarea name="description" rows="4"></textarea>
+          </label>
+          <label>
+            Flajer
+            <input name="flyer" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+          </label>
+          <label id="remove-flyer-wrap" class="check-row" hidden>
+            <input name="remove_flyer" type="checkbox" value="true" />
+            Ukloni postojeći flajer
+          </label>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">Sačuvaj</button>
+            <button id="cancel-edit" class="ghost-button" type="button">Otkaži</button>
+          </div>
+          <p id="event-message" class="message" role="status"></p>
+        </form>
+      </section>
+    </div>
+
+    <div id="user-modal" class="modal-backdrop" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+        <button id="user-modal-close" class="modal-close" type="button" aria-label="Zatvori" title="Zatvori">×</button>
+        <div class="modal-header">
+          <p class="eyebrow">Detalji naloga</p>
+          <h2 id="user-modal-title">Organizacija</h2>
+        </div>
+
+        <div id="admin-user-details" class="event-details"></div>
+
+        <form id="password-reset-form" class="event-form password-reset-form">
+          <input name="user_id" type="hidden" />
+          <label>
+            Nova privremena lozinka
+            <input name="password" type="password" minlength="8" autocomplete="new-password" required />
+          </label>
+          <div class="modal-actions">
+            <button class="danger-button" type="submit">Resetuj lozinku</button>
+            <button id="cancel-password-reset" class="ghost-button" type="button">Zatvori</button>
+          </div>
+          <p id="password-reset-message" class="message" role="status"></p>
+        </form>
+      </section>
+    </div>
+
+    <div id="flyer-lightbox" class="lightbox-backdrop" hidden>
+      <button id="lightbox-close" class="lightbox-close" type="button" aria-label="Zatvori" title="Zatvori">×</button>
+      <img id="lightbox-image" src="" alt="Flajer događaja" />
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
