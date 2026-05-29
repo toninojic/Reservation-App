@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const Database = require("better-sqlite3");
 const bcrypt = require("bcryptjs");
+const logger = require("../utils/logger");
+const { isValidEmail, isValidPassword } = require("../utils/validation");
 
 const rootDir = path.join(__dirname, "..", "..");
 const dbPath = path.resolve(rootDir, process.env.DB_PATH || "./data/rezervacije.sqlite");
@@ -67,6 +69,15 @@ function createDefaultAdmin() {
 
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@rezervacije.local").trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || "PromeniMe123!";
+
+  if (logger.isProduction && (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+    throw new Error("ADMIN_EMAIL i ADMIN_PASSWORD moraju biti podeseni u produkciji.");
+  }
+
+  if (!isValidEmail(adminEmail) || !isValidPassword(adminPassword)) {
+    throw new Error("Admin kredencijali nisu ispravni.");
+  }
+
   const passwordHash = bcrypt.hashSync(adminPassword, 12);
 
   database
@@ -80,7 +91,7 @@ function createDefaultAdmin() {
       password_hash: passwordHash
     });
 
-  console.log(`Kreiran je podrazumevani admin nalog: ${adminEmail}`);
+  logger.info(`Kreiran je podrazumevani admin nalog: ${adminEmail}`);
 }
 
 module.exports = {

@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { getDb } = require("../db/database");
 const { deleteUploadedFile } = require("../utils/uploads");
+const { isPlainObject, isValidPassword, parsePositiveInteger } = require("../utils/validation");
 
 function publicAdminUser(user) {
   return {
@@ -40,7 +41,11 @@ function listUsers(req, res) {
 }
 
 function getUserDetails(req, res) {
-  const id = Number(req.params.id);
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "ID korisnika nije ispravan." });
+  }
+
   const user = getDb()
     .prepare(
       `SELECT
@@ -67,7 +72,15 @@ function getUserDetails(req, res) {
 }
 
 function updateUserStatus(req, res) {
-  const id = Number(req.params.id);
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "ID korisnika nije ispravan." });
+  }
+
+  if (!isPlainObject(req.body)) {
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
   const status = String(req.body.status || "").trim();
 
   if (!["pending", "approved", "rejected"].includes(status)) {
@@ -75,7 +88,7 @@ function updateUserStatus(req, res) {
   }
 
   const database = getDb();
-  const user = database.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  const user = database.prepare("SELECT id, role FROM users WHERE id = ?").get(id);
 
   if (!user) {
     return res.status(404).json({ message: "Korisnik nije pronađen." });
@@ -101,11 +114,19 @@ function updateUserStatus(req, res) {
 }
 
 function resetUserPassword(req, res) {
-  const id = Number(req.params.id);
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "ID korisnika nije ispravan." });
+  }
+
+  if (!isPlainObject(req.body)) {
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
   const newPassword = String(req.body.password || "");
 
-  if (newPassword.length < 8) {
-    return res.status(400).json({ message: "Nova privremena lozinka mora imati najmanje 8 karaktera." });
+  if (!isValidPassword(newPassword)) {
+    return res.status(400).json({ message: "Nova privremena lozinka mora imati između 8 i 128 karaktera." });
   }
 
   const database = getDb();
@@ -128,14 +149,17 @@ function resetUserPassword(req, res) {
 }
 
 function deleteUser(req, res) {
-  const id = Number(req.params.id);
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "ID korisnika nije ispravan." });
+  }
 
   if (id === req.user.id) {
     return res.status(400).json({ message: "Ne možete obrisati sopstveni admin nalog." });
   }
 
   const database = getDb();
-  const user = database.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  const user = database.prepare("SELECT id, role, logo_path FROM users WHERE id = ?").get(id);
 
   if (!user) {
     return res.status(404).json({ message: "Korisnik nije pronađen." });

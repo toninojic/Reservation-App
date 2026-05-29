@@ -1,13 +1,19 @@
 const { getDb } = require("../db/database");
+const { parsePositiveInteger } = require("../utils/validation");
 
 function findSessionUser(userId) {
+  const id = parsePositiveInteger(userId);
+  if (!id) {
+    return null;
+  }
+
   return getDb()
     .prepare(
       `SELECT id, organization_name, email, logo_path, role, status, created_at
        FROM users
        WHERE id = ?`
     )
-    .get(userId);
+    .get(id);
 }
 
 function requireAuth(req, res, next) {

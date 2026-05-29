@@ -1,5 +1,6 @@
 const { getDb } = require("../db/database");
 const { deleteUploadedFile, fileToPublicPath } = require("../utils/uploads");
+const { isPlainObject, normalizeText, parsePositiveInteger } = require("../utils/validation");
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const timePattern = /^\d{2}:\d{2}$/;
@@ -43,13 +44,13 @@ function isValidTime(value) {
 function readEventPayload(body) {
   return {
     event_date: String(body.event_date || "").trim(),
-    event_name: String(body.event_name || "").trim(),
+    event_name: normalizeText(body.event_name, 160),
     start_time: String(body.start_time || "").trim(),
     end_time: String(body.end_time || "").trim(),
-    location: String(body.location || "").trim(),
-    contact_person: String(body.contact_person || "").trim() || null,
+    location: normalizeText(body.location, 160),
+    contact_person: normalizeText(body.contact_person, 120) || null,
     phone: String(body.phone || "").trim() || null,
-    description: String(body.description || "").trim() || null
+    description: normalizeText(body.description, 2000) || null
   };
 }
 
@@ -84,8 +85,16 @@ function validateEventPayload(payload) {
     return "Naziv događaja i lokacija mogu imati najviše 160 karaktera.";
   }
 
+  if (payload.contact_person && payload.contact_person.length > 120) {
+    return "Kontakt osoba može imati najviše 120 karaktera.";
+  }
+
   if (payload.phone && !/^[0-9+()\-\s/]{3,40}$/.test(payload.phone)) {
     return "Telefon nije u ispravnom formatu.";
+  }
+
+  if (payload.description && payload.description.length > 2000) {
+    return "Opis može imati najviše 2000 karaktera.";
   }
 
   return null;
@@ -104,8 +113,16 @@ function eventSelectSql() {
 
 function listEvents(req, res) {
   const bounds = currentCalendarBounds();
-  const from = req.query.from && isValidDateString(req.query.from) ? req.query.from : bounds.min;
-  const to = req.query.to && isValidDateString(req.query.to) ? req.query.to : bounds.max;
+  if ((req.query.from && !isValidDateString(req.query.from)) || (req.query.to && !isValidDateString(req.query.to))) {
+    return res.status(400).json({ message: "Opseg datuma nije ispravan." });
+  }
+
+  const from = req.query.from || bounds.min;
+  const to = req.query.to || bounds.max;
+
+  if (from > to) {
+    return res.status(400).json({ message: "Opseg datuma nije ispravan." });
+  }
 
   const events = getDb()
     .prepare(
@@ -130,9 +147,14 @@ function listAllEvents(req, res) {
 }
 
 function getEvent(req, res) {
+  const id = parsePositiveInteger(req.params.id);
+  if (!id) {
+    return res.status(400).json({ message: "ID događaja nije ispravan." });
+  }
+
   const event = getDb()
     .prepare(`${eventSelectSql()} WHERE events.id = ?`)
-    .get(Number(req.params.id));
+    .get(id);
 
   if (!event) {
     return res.status(404).json({ message: "Događaj nije pronađen." });
@@ -142,6 +164,11 @@ function getEvent(req, res) {
 }
 
 function createEvent(req, res) {
+  if (!isPlainObject(req.body)) {
+    deleteUploadedFile(fileToPublicPath(req.file));
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
   const payload = readEventPayload(req.body);
   const flyerPath = fileToPublicPath(req.file);
   const validationError = validateEventPayload(payload);
@@ -189,9 +216,20 @@ function canManageEvent(user, event) {
 
 function updateEvent(req, res) {
   const database = getDb();
-  const id = Number(req.params.id);
-  const existing = database.prepare("SELECT * FROM events WHERE id = ?").get(id);
+  const id = parsePositiveInteger(req.params.id);
   const newFlyerPath = fileToPublicPath(req.file);
+
+  if (!id) {
+    deleteUploadedFile(newFlyerPath);
+    return res.status(400).json({ message: "ID događaja nije ispravan." });
+  }
+
+  if (!isPlainObject(req.body)) {
+    deleteUploadedFile(newFlyerPath);
+    return res.status(400).json({ message: "Zahtev nije ispravan." });
+  }
+
+  const existing = database.prepare("SELECT id, user_id, flyer_path FROM events WHERE id = ?").get(id);
 
   if (!existing) {
     deleteUploadedFile(newFlyerPath);
@@ -250,8 +288,13 @@ function updateEvent(req, res) {
 
 function deleteEvent(req, res) {
   const database = getDb();
-  const id = Number(req.params.id);
-  const existing = database.prepare("SELECT * FROM events WHERE id = ?").get(id);
+  const id = parsePositiveInteger(req.params.id);
+
+  if (!id) {
+    return res.status(400).json({ message: "ID događaja nije ispravan." });
+  }
+
+  const existing = database.prepare("SELECT id, user_id, flyer_path FROM events WHERE id = ?").get(id);
 
   if (!existing) {
     return res.status(404).json({ message: "Događaj nije pronađen." });
