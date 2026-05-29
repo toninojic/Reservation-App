@@ -1,6 +1,6 @@
 # Rezervacija datuma
 
-Full-stack MVP aplikacija za organizacije koje žele da rezervišu datume događaja. Aplikacija nema javni kalendar: korisnici moraju biti prijavljeni da bi videli ili rezervisali datume.
+Full-stack MVP aplikacija za organizacije koje žele da rezervišu datume događaja. Početna strana prikazuje javni kalendar, dok je kreiranje, izmena i brisanje rezervacija dostupno samo prijavljenim i odobrenim korisnicima.
 
 ## Tehnologije
 
@@ -51,6 +51,8 @@ Full-stack MVP aplikacija za organizacije koje žele da rezervišu datume događ
    http://localhost:3000
    ```
 
+   Javni kalendar je dostupan na `/`, prijava na `/login`, registracija na `/register`, korisnički kalendar na `/dashboard`, a admin panel na `/admin`.
+
 ## Test tok
 
 1. Prijavite se kao admin kroz istu login stranicu:
@@ -64,11 +66,13 @@ Full-stack MVP aplikacija za organizacije koje žele da rezervišu datume događ
 
 4. Admin u `Admin panel` delu može da odobri, odbije ili obriše nalog.
 
-5. Nakon odobrenja, organizacija se prijavljuje i vidi `Kalendar`.
+5. Bez prijave otvorite `/` i proverite da se vidi kalendar, rezervisani datumi i detalji događaja. Klik na slobodan datum prikazuje poruku da je prijava potrebna za rezervaciju.
 
-6. Klik na slobodan datum otvara formu `Rezerviši datum`.
+6. Nakon odobrenja, organizacija se prijavljuje i vidi `Kalendar`.
 
-7. Klik na rezervisan datum prikazuje detalje događaja. Korisnik može da izmeni ili obriše samo sopstvene događaje, dok admin može da izmeni ili obriše bilo koju rezervaciju.
+7. Klik na slobodan datum za prijavljenu organizaciju otvara formu `Rezerviši datum`.
+
+8. Klik na rezervisan datum prikazuje detalje događaja. Korisnik može da izmeni ili obriše samo sopstvene događaje, dok admin može da izmeni ili obriše bilo koju rezervaciju.
 
 ## Upload i baza
 

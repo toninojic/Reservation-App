@@ -4,13 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rezervacija datuma</title>
+    <link rel="icon" href="/img/logo.jpg" />
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
     <main id="auth-screen" class="auth-screen" hidden>
       <section class="auth-card" aria-label="Prijava i registracija">
-        <div class="brand-mark">
-          <span>RK</span>
+        <div class="brand-mark site-logo">
+          <img src="/img/logo.jpg" alt="Rezervacija datuma" />
         </div>
         <h1>Rezervacija datuma</h1>
         <div class="auth-tabs" role="tablist">
@@ -58,7 +59,9 @@
       <header class="topbar">
         <div class="topbar-inner">
           <div class="topbar-brand">
-            <div class="app-logo" aria-hidden="true">RK</div>
+            <div class="app-logo" aria-hidden="true">
+              <img src="/img/logo.jpg" alt="" />
+            </div>
             <div>
               <p class="app-title">Rezervacija datuma</p>
               <p class="topbar-subtitle" id="role-label">Kalendar</p>
@@ -71,6 +74,10 @@
           </div>
 
           <div class="topbar-actions">
+            <div id="public-auth-actions" class="public-auth-actions" hidden>
+              <button id="public-login-button" class="ghost-button" type="button">Prijava</button>
+              <button id="public-register-button" class="primary-button topbar-register-button" type="button">Registracija</button>
+            </div>
             <div id="user-chip" class="user-chip"></div>
             <button id="profile-button" class="ghost-button" type="button" hidden>Podešavanja profila</button>
             <button id="logout-button" class="ghost-button" type="button">Odjava</button>

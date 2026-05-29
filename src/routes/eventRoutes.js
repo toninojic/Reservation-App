@@ -6,11 +6,10 @@ const { createUploader } = require("../utils/uploads");
 const router = express.Router();
 const flyerUpload = createUploader("flyers");
 
-router.use(requireAuth);
 router.get("/", eventController.listEvents);
 router.get("/:id", eventController.getEvent);
-router.post("/", flyerUpload.single("flyer"), eventController.createEvent);
-router.put("/:id", flyerUpload.single("flyer"), eventController.updateEvent);
-router.delete("/:id", eventController.deleteEvent);
+router.post("/", requireAuth, flyerUpload.single("flyer"), eventController.createEvent);
+router.put("/:id", requireAuth, flyerUpload.single("flyer"), eventController.updateEvent);
+router.delete("/:id", requireAuth, eventController.deleteEvent);
 
 module.exports = router;
