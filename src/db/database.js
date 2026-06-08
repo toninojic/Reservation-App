@@ -12,6 +12,101 @@ const defaultAdminPassword = "PromeniMe123!";
 const defaultAdminName = "Administrator";
 let db;
 
+function eventTableSql(database) {
+  const row = database
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'events'")
+    .get();
+
+  return row ? String(row.sql || "") : "";
+}
+
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function uniqueEventDateIndexes(database) {
+  return database
+    .prepare("PRAGMA index_list(events)")
+    .all()
+    .filter((index) => Number(index.unique) === 1)
+    .filter((index) => {
+      const columns = database.prepare(`PRAGMA index_info(${quoteIdentifier(index.name)})`).all();
+      return columns.length === 1 && columns[0].name === "event_date";
+    });
+}
+
+function eventsDateIsUnique(database) {
+  return /\bevent_date\b[^,\n]*\bUNIQUE\b/i.test(eventTableSql(database)) || uniqueEventDateIndexes(database).length > 0;
+}
+
+function migrateEventsAllowMultipleDates(database) {
+  if (!eventsDateIsUnique(database)) {
+    return;
+  }
+
+  const hasInlineUniqueDate = /\bevent_date\b[^,\n]*\bUNIQUE\b/i.test(eventTableSql(database));
+  const explicitUniqueDateIndexes = uniqueEventDateIndexes(database).filter(
+    (index) => !String(index.name).startsWith("sqlite_autoindex")
+  );
+
+  explicitUniqueDateIndexes.forEach((index) => {
+    database.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(index.name)}`);
+  });
+
+  if (!hasInlineUniqueDate) {
+    logger.info("Uklonjen je jedinstveni indeks sa events.event_date.");
+    return;
+  }
+
+  const previousForeignKeys = database.pragma("foreign_keys", { simple: true });
+
+  database.pragma("foreign_keys = OFF");
+  try {
+    const rebuildEvents = database.transaction(() => {
+      database.exec(`
+        CREATE TABLE events_next (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          event_date TEXT NOT NULL,
+          event_name TEXT NOT NULL,
+          start_time TEXT NOT NULL,
+          end_time TEXT NOT NULL,
+          location TEXT NOT NULL,
+          contact_person TEXT,
+          phone TEXT,
+          description TEXT,
+          flyer_path TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO events_next (
+          id, user_id, event_date, event_name, start_time, end_time, location,
+          contact_person, phone, description, flyer_path, created_at, updated_at
+        )
+        SELECT
+          id, user_id, event_date, event_name, start_time, end_time, location,
+          contact_person, phone, description, flyer_path, created_at, updated_at
+        FROM events;
+
+        DROP TABLE events;
+        ALTER TABLE events_next RENAME TO events;
+      `);
+    });
+
+    rebuildEvents();
+  } finally {
+    database.pragma(`foreign_keys = ${previousForeignKeys ? "ON" : "OFF"}`);
+  }
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
+    CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
+  `);
+  logger.info("Migrirana tabela events: event_date vise nije jedinstven.");
+}
+
 function getDb() {
   if (!db) {
     const dbDir = path.dirname(dbPath);
@@ -42,7 +137,7 @@ function initDatabase() {
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      event_date TEXT NOT NULL UNIQUE,
+      event_date TEXT NOT NULL,
       event_name TEXT NOT NULL,
       start_time TEXT NOT NULL,
       end_time TEXT NOT NULL,
@@ -60,6 +155,8 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
     CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
   `);
+
+  migrateEventsAllowMultipleDates(database);
 }
 
 function createDefaultAdmin() {

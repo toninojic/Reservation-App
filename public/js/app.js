@@ -16,6 +16,15 @@ const state = {
     didSwipe: false
   },
   modalEvent: null,
+  modalEvents: [],
+  modalDate: null,
+  modalSlideIndex: 0,
+  modalSwipe: {
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    active: false
+  },
   modalMode: "view"
 };
 
@@ -140,11 +149,7 @@ function bindEvents() {
   });
   els.modalClose.addEventListener("click", closeModal);
   els.cancelEdit.addEventListener("click", () => {
-    if (state.modalEvent) {
-      showEventDetails(state.modalEvent);
-    } else {
-      closeModal();
-    }
+    returnToModalView();
   });
   els.eventModal.addEventListener("click", (event) => {
     if (event.target === els.eventModal) {
@@ -567,7 +572,7 @@ function clampCurrentMonth() {
 }
 
 function renderCalendar() {
-  const eventsByDate = new Map(state.events.map((event) => [event.event_date, event]));
+  const eventsByDate = groupEventsByDate(state.events);
   const firstDay = new Date(state.currentYear, state.currentMonth, 1);
   const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
   const leadingEmpty = (firstDay.getDay() + 6) % 7;
@@ -585,9 +590,11 @@ function renderCalendar() {
 
   for (let day = 1; day <= daysInMonth; day += 1) {
     const dateKey = formatDate(new Date(state.currentYear, state.currentMonth, day));
-    const event = eventsByDate.get(dateKey);
+    const dateEvents = eventsByDate.get(dateKey) || [];
+    const firstEvent = dateEvents[0];
+    const hasEvents = dateEvents.length > 0;
     const classes = ["day-cell"];
-    const statusDots = renderCalendarStatusDots(event, dateKey, today);
+    const statusDots = renderCalendarStatusDots(dateEvents, dateKey, today);
 
     if (dateKey === today) {
       classes.push("is-today");
@@ -597,22 +604,25 @@ function renderCalendar() {
       classes.push("is-selected");
     }
 
-    if (event) {
+    if (hasEvents) {
       classes.push("is-reserved");
-      if (state.user && event.user_id === state.user.id) {
+      if (dateEvents.length > 1) {
+        classes.push("is-multiple");
+      }
+      if (dateEvents.some((event) => state.user && event.user_id === state.user.id)) {
         classes.push("is-own");
       }
     }
 
     cells.push(`
       <button class="${classes.join(" ")}" type="button" data-date="${dateKey}" title="${escapeHtml(
-        event ? event.event_name : "Rezerviši datum"
+        hasEvents ? calendarCellTitle(dateEvents) : "Rezerviši datum"
       )}">
         <span class="day-cell-top">
           <span class="day-number">${day}</span>
           <span class="date-status-dots" aria-hidden="true">${statusDots}</span>
         </span>
-        ${event ? renderEventPreview(event) : '<span class="day-free">Slobodno</span>'}
+        ${hasEvents ? renderDateEventsPreview(dateEvents, firstEvent) : '<span class="day-free">Slobodno</span>'}
       </button>
     `);
   }
@@ -631,16 +641,49 @@ function renderCalendar() {
   updateMonthButtons();
 }
 
-function getCalendarStatus(event, dateKey, todayKey) {
-  if (event && state.user && event.user_id === state.user.id) {
+function groupEventsByDate(events) {
+  return events.reduce((map, event) => {
+    const dateEvents = map.get(event.event_date) || [];
+    dateEvents.push(event);
+    map.set(event.event_date, sortEventsForDisplay(dateEvents));
+    return map;
+  }, new Map());
+}
+
+function getEventsForDate(dateKey) {
+  return sortEventsForDisplay(state.events.filter((event) => event.event_date === dateKey));
+}
+
+function sortEventsForDisplay(events) {
+  return [...events].sort(
+    (a, b) =>
+      a.event_date.localeCompare(b.event_date) ||
+      a.start_time.localeCompare(b.start_time) ||
+      a.event_name.localeCompare(b.event_name)
+  );
+}
+
+function calendarCellTitle(events) {
+  if (events.length === 1) {
+    return events[0].event_name;
+  }
+
+  return `${events.length} događaja`;
+}
+
+function getCalendarStatus(events, dateKey, todayKey) {
+  const dateEvents = Array.isArray(events) ? events : events ? [events] : [];
+  const hasEvents = dateEvents.length > 0;
+
+  if (hasEvents && state.user && dateEvents.some((event) => event.user_id === state.user.id)) {
     return "mine";
   }
 
-  if (event && state.user && event.user_id && event.user_id !== state.user.id) {
+  if (hasEvents && state.user && dateEvents.some((event) => event.user_id && event.user_id !== state.user.id)) {
     return "other";
   }
 
-  if (event) {
+  if (hasEvents) {
     return "reserved";
   }
 
@@ -651,9 +694,20 @@ function getCalendarStatus(event, dateKey, todayKey) {
   return "free";
 }
 
-function renderCalendarStatusDots(event, dateKey, todayKey) {
-  const status = getCalendarStatus(event, dateKey, todayKey);
+function renderCalendarStatusDots(events, dateKey, todayKey) {
+  const dateEvents = Array.isArray(events) ? events : events ? [events] : [];
+  const status = getCalendarStatus(dateEvents, dateKey, todayKey);
+  const hasMine = dateEvents.some((event) => state.user && event.user_id === state.user.id);
+  const hasOther = dateEvents.some((event) => state.user && event.user_id && event.user_id !== state.user.id);
   const dots = [`<i class="status-dot status-dot--${status}"></i>`];
+
+  if (dateEvents.length > 1) {
+    dots.push('<i class="status-dot status-dot--multiple status-dot--secondary"></i>');
+  }
+
+  if (hasMine && hasOther) {
+    dots.push('<i class="status-dot status-dot--other status-dot--secondary"></i>');
+  }
 
   if (dateKey === todayKey && status !== "today") {
     dots.push('<i class="status-dot status-dot--today status-dot--secondary"></i>');
@@ -690,7 +744,7 @@ function renderUpcomingEvents() {
   els.upcomingEvents.innerHTML = futureUpcoming
     .map(
       (event) => `
-        <button class="upcoming-card" type="button" data-date="${event.event_date}">
+        <button class="upcoming-card" type="button" data-date="${event.event_date}" data-event-id="${event.id}">
           <span class="upcoming-date">${formatDisplayDate(event.event_date)}</span>
           <strong>${escapeHtml(event.event_name)}</strong>
           <span>${escapeHtml(event.start_time)} - ${escapeHtml(event.end_time)}</span>
@@ -702,7 +756,7 @@ function renderUpcomingEvents() {
     .join("");
 
   els.upcomingEvents.querySelectorAll("[data-date]").forEach((button) => {
-    button.addEventListener("click", () => openDate(button.dataset.date));
+    button.addEventListener("click", () => openDate(button.dataset.date, { eventId: Number(button.dataset.eventId) }));
   });
 }
 
@@ -717,7 +771,7 @@ function renderTodayEvents(events) {
   els.todayEvents.innerHTML = events
     .map(
       (event) => `
-        <button class="today-event-card" type="button" data-date="${event.event_date}">
+        <button class="today-event-card" type="button" data-date="${event.event_date}" data-event-id="${event.id}">
           <span class="today-badge">Danas</span>
           <strong>${escapeHtml(event.event_name)}</strong>
           <span>${escapeHtml(event.start_time)} - ${escapeHtml(event.end_time)}</span>
@@ -729,18 +783,79 @@ function renderTodayEvents(events) {
     .join("");
 
   els.todayEvents.querySelectorAll("[data-date]").forEach((button) => {
-    button.addEventListener("click", () => openDate(button.dataset.date));
+    button.addEventListener("click", () => openDate(button.dataset.date, { eventId: Number(button.dataset.eventId) }));
   });
 }
 
+function renderDateEventsPreview(events, fallbackEvent) {
+  return events.length > 1 ? renderMultipleEventPreview(events) : renderEventPreview(fallbackEvent);
+}
+
 function renderEventPreview(event) {
-  const imagePath = event.logo_path || event.flyer_path;
+  const logoPath = organizationLogoPath(event);
   return `
     <span class="event-preview">
-      ${imagePath ? `<img class="event-thumb" src="${escapeAttribute(imagePath)}" alt="">` : ""}
+      ${
+        logoPath
+          ? `<img class="event-thumb" src="${escapeAttribute(logoPath)}" alt="">`
+          : `<span class="event-thumb event-thumb--placeholder">${escapeHtml(eventInitials(event))}</span>`
+      }
       <span class="event-title">${escapeHtml(event.event_name)}</span>
     </span>
   `;
+}
+
+function renderMultipleEventPreview(events) {
+  const visibleEvents = events.slice(0, 3);
+  const extraCount = events.length - visibleEvents.length;
+  const avatars = visibleEvents
+    .map((event, index) => renderEventAvatar(event, index))
+    .join("");
+
+  return `
+    <span class="event-preview event-preview--multiple">
+      <span class="event-avatar-group" aria-hidden="true">
+        ${avatars}
+        ${
+          extraCount > 0
+            ? `<span class="event-avatar event-avatar--more">+${extraCount}</span>`
+            : ""
+        }
+      </span>
+      <span class="event-count-label">${events.length} događaja</span>
+    </span>
+  `;
+}
+
+function renderEventAvatar(event, index) {
+  const logoPath = organizationLogoPath(event);
+
+  if (logoPath) {
+    return `<span class="event-avatar" style="--avatar-index: ${index}"><img src="${escapeAttribute(logoPath)}" alt=""></span>`;
+  }
+
+  return `<span class="event-avatar event-avatar--initials" style="--avatar-index: ${index}">${escapeHtml(
+    eventInitials(event)
+  )}</span>`;
+}
+
+function eventInitials(event) {
+  const source = String(event.organization_name || event.event_name || "Događaj").trim();
+  const words = source.split(/\s+/).filter(Boolean);
+  const initials = words
+    .slice(0, 2)
+    .map((word) => word.charAt(0))
+    .join("");
+
+  return (initials || "DG").toLocaleUpperCase("sr-RS");
+}
+
+function organizationLogoPath(event) {
+  return event.organization_logo_path || event.logo_path || "";
+}
+
+function eventFlyerPath(event) {
+  return event.flyer_path || "";
 }
 
 function updateMonthButtons() {
@@ -849,7 +964,7 @@ function goToToday() {
   renderCalendar();
 }
 
-function openDate(dateKey) {
+function openDate(dateKey, options = {}) {
   const parts = parseDateParts(dateKey);
   state.currentYear = parts.year;
   state.currentMonth = parts.month - 1;
@@ -857,29 +972,25 @@ function openDate(dateKey) {
   clampCurrentMonth();
   renderCalendar();
 
-  const event = state.events.find((item) => item.event_date === dateKey);
+  const dateEvents = getEventsForDate(dateKey);
 
-  if (event) {
-    showEventDetails(event);
+  if (dateEvents.length === 1) {
+    showEventDetails(dateEvents[0]);
+  } else if (dateEvents.length > 1) {
+    const requestedIndex = dateEvents.findIndex((event) => event.id === options.eventId);
+    showEventCarousel(dateEvents, dateKey, requestedIndex >= 0 ? requestedIndex : 0);
   } else if (!state.user) {
     showPublicReservationPrompt(dateKey);
   } else {
-    showEventForm({
-      event_date: dateKey,
-      event_name: "",
-      start_time: "",
-      end_time: "",
-      location: "",
-      contact_person: "",
-      phone: "",
-      description: "",
-      flyer_path: ""
-    });
+    showEventForm(blankEventForDate(dateKey));
   }
 }
 
 function showPublicReservationPrompt(dateKey) {
   state.modalEvent = null;
+  state.modalEvents = [];
+  state.modalDate = dateKey;
+  state.modalSlideIndex = 0;
   state.modalMode = "public";
   els.eventForm.hidden = true;
   els.eventDetails.hidden = false;
@@ -922,6 +1033,9 @@ async function handlePublicPromptAction(action) {
 
 function showEventDetails(event) {
   state.modalEvent = event;
+  state.modalEvents = [event];
+  state.modalDate = event.event_date;
+  state.modalSlideIndex = 0;
   state.modalMode = "view";
   els.eventForm.hidden = true;
   els.eventDetails.hidden = false;
@@ -929,20 +1043,111 @@ function showEventDetails(event) {
   els.modalDateLabel.textContent = formatDisplayDate(event.event_date);
   els.eventMessage.textContent = "";
 
-  const imagePath = event.logo_path || event.flyer_path;
-  const canManage = state.user && (state.user.role === "admin" || event.user_id === state.user.id);
-  const heroMedia =
-    imagePath && imagePath === event.flyer_path
-      ? `<button class="media-button" type="button" data-action="flyer" aria-label="Otvori flajer">
-           <img src="${escapeAttribute(imagePath)}" alt="${escapeAttribute(event.event_name)}">
-         </button>`
-      : imagePath
-        ? `<img src="${escapeAttribute(imagePath)}" alt="${escapeAttribute(event.event_name)}">`
-        : `<div class="brand-mark"><span>RK</span></div>`;
+  els.eventDetails.innerHTML = renderEventDetailHtml(event, {
+    showAddAnother: true,
+    showClose: true
+  });
+  bindModalActionButtons();
 
+  els.eventModal.hidden = false;
+}
+
+function showEventCarousel(events, dateKey, initialIndex = 0) {
+  state.modalEvents = sortEventsForDisplay(events);
+  state.modalDate = dateKey;
+  state.modalSlideIndex = Math.min(Math.max(initialIndex, 0), state.modalEvents.length - 1);
+  state.modalEvent = state.modalEvents[state.modalSlideIndex] || null;
+  state.modalMode = "view";
+  els.eventForm.hidden = true;
+  els.eventDetails.hidden = false;
+  els.eventMessage.textContent = "";
+  renderEventCarousel();
+  els.eventModal.hidden = false;
+}
+
+function renderEventCarousel() {
+  const events = state.modalEvents;
+  const currentIndex = Math.min(Math.max(state.modalSlideIndex, 0), events.length - 1);
+
+  if (!events.length) {
+    closeModal();
+    return;
+  }
+
+  state.modalSlideIndex = currentIndex;
+  state.modalEvent = events[currentIndex];
+  els.modalTitle.textContent = events[currentIndex].event_name;
+  els.modalDateLabel.textContent = `${formatDisplayDate(state.modalDate || events[currentIndex].event_date)} · ${
+    currentIndex + 1
+  } / ${events.length}`;
   els.eventDetails.innerHTML = `
+    <div class="event-carousel" data-carousel>
+      <div class="carousel-shell">
+        <button class="carousel-arrow carousel-arrow--prev" type="button" data-carousel-action="prev" aria-label="Prethodni događaj" ${
+          currentIndex === 0 ? "disabled" : ""
+        }>‹</button>
+        <div class="carousel-viewport">
+          <div class="carousel-track">
+            ${events
+              .map(
+                (event, index) => `
+                  <article
+                    class="carousel-slide ${index === currentIndex ? "is-active" : ""}"
+                    data-event-id="${event.id}"
+                    data-slide-index="${index}"
+                    aria-hidden="${index === currentIndex ? "false" : "true"}"
+                    ${index === currentIndex ? "" : "hidden"}
+                  >
+                    ${renderEventDetailHtml(event, { showAddAnother: false, showClose: false })}
+                  </article>
+                `
+              )
+              .join("")}
+          </div>
+        </div>
+        <button class="carousel-arrow carousel-arrow--next" type="button" data-carousel-action="next" aria-label="Sledeći događaj" ${
+          currentIndex === events.length - 1 ? "disabled" : ""
+        }>›</button>
+      </div>
+      <div class="carousel-dots" aria-label="Navigacija događaja">
+        ${events
+          .map(
+            (_, index) => `
+              <button class="carousel-dot ${index === currentIndex ? "is-active" : ""}" type="button" data-slide-index="${index}" aria-label="Prikaži događaj ${index + 1}"></button>
+            `
+          )
+          .join("")}
+      </div>
+      <div class="modal-actions carousel-actions">
+        ${
+          canAddEventsToDate()
+            ? `<button class="primary-button" type="button" data-action="add-another" data-date="${escapeAttribute(
+                state.modalDate || events[currentIndex].event_date
+              )}">Dodaj još jedan događaj</button>`
+            : ""
+        }
+        <button class="ghost-button" type="button" data-action="close">Zatvori</button>
+      </div>
+    </div>
+  `;
+
+  bindModalActionButtons();
+  bindCarouselControls();
+}
+
+function renderEventDetailHtml(event, options = {}) {
+  const logoPath = organizationLogoPath(event);
+  const flyerPath = eventFlyerPath(event);
+  const canManage = state.user && (state.user.role === "admin" || event.user_id === state.user.id);
+  const showAddAnother = options.showAddAnother && canAddEventsToDate();
+  const showClose = options.showClose !== false;
+  const organizationMedia = logoPath
+    ? `<img src="${escapeAttribute(logoPath)}" alt="${escapeAttribute(event.organization_name || "Organizacija")}">`
+    : `<div class="brand-mark"><span>${escapeHtml(eventInitials(event))}</span></div>`;
+
+  return `
     <div class="detail-hero">
-      ${heroMedia}
+      ${organizationMedia}
       <div>
         <p class="eyebrow">${escapeHtml(event.organization_name)}</p>
         <h3>${escapeHtml(event.event_name)}</h3>
@@ -962,29 +1167,137 @@ function showEventDetails(event) {
         : ""
     }
     ${
-      event.flyer_path && imagePath !== event.flyer_path
-        ? `<button class="flyer-preview" type="button" data-action="flyer">
-             <img src="${escapeAttribute(event.flyer_path)}" alt="${escapeAttribute(event.event_name)}">
+      flyerPath
+        ? `<button class="flyer-preview" type="button" data-action="flyer" data-event-id="${event.id}">
+             <img src="${escapeAttribute(flyerPath)}" alt="${escapeAttribute(event.event_name)}">
              <span>Otvori flajer preko celog ekrana</span>
            </button>`
         : ""
     }
     <div class="modal-actions">
       ${
-        canManage
-          ? `<button class="primary-button" type="button" data-action="edit">Izmeni</button>
-             <button class="danger-button" type="button" data-action="delete">Obriši</button>`
+        showAddAnother
+          ? `<button class="primary-button" type="button" data-action="add-another" data-date="${escapeAttribute(
+              event.event_date
+            )}">Dodaj još jedan događaj</button>`
           : ""
       }
-      <button class="ghost-button" type="button" data-action="close">Zatvori</button>
+      ${
+        canManage
+          ? `<button class="small-button" type="button" data-action="edit" data-event-id="${event.id}">Izmeni</button>
+             <button class="danger-button" type="button" data-action="delete" data-event-id="${event.id}">Obriši</button>`
+          : ""
+      }
+      ${showClose ? '<button class="ghost-button" type="button" data-action="close">Zatvori</button>' : ""}
     </div>
   `;
+}
 
+function bindModalActionButtons() {
   els.eventDetails.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => handleModalAction(button.dataset.action, event));
+    const eventId = Number(button.dataset.eventId);
+    const event = eventId ? state.modalEvents.find((item) => item.id === eventId) || state.modalEvent : state.modalEvent;
+
+    button.addEventListener("click", () =>
+      handleModalAction(button.dataset.action, event, {
+        date: button.dataset.date
+      })
+    );
+  });
+}
+
+function bindCarouselControls() {
+  els.eventDetails.querySelectorAll("[data-carousel-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      moveEventSlide(button.dataset.carouselAction === "next" ? 1 : -1);
+    });
   });
 
-  els.eventModal.hidden = false;
+  els.eventDetails.querySelectorAll("[data-slide-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      goToEventSlide(Number(button.dataset.slideIndex));
+    });
+  });
+
+  const viewport = els.eventDetails.querySelector(".carousel-viewport");
+  if (!viewport) {
+    return;
+  }
+
+  viewport.addEventListener("touchstart", handleModalSwipeStart, { passive: true });
+  viewport.addEventListener("touchmove", handleModalSwipeMove, { passive: false });
+  viewport.addEventListener("touchend", handleModalSwipeEnd);
+  viewport.addEventListener("touchcancel", handleModalSwipeCancel);
+}
+
+function moveEventSlide(delta) {
+  const nextIndex = state.modalSlideIndex + delta;
+  const lastIndex = state.modalEvents.length - 1;
+
+  if (nextIndex < 0 || nextIndex > lastIndex) {
+    return;
+  }
+
+  goToEventSlide(nextIndex);
+}
+
+function goToEventSlide(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= state.modalEvents.length) {
+    return;
+  }
+
+  state.modalSlideIndex = index;
+  renderEventCarousel();
+}
+
+function handleModalSwipeStart(event) {
+  if (event.touches.length !== 1) {
+    return;
+  }
+
+  const touch = event.touches[0];
+  state.modalSwipe.startX = touch.clientX;
+  state.modalSwipe.startY = touch.clientY;
+  state.modalSwipe.currentX = touch.clientX;
+  state.modalSwipe.active = true;
+}
+
+function handleModalSwipeMove(event) {
+  if (!state.modalSwipe.active || event.touches.length !== 1) {
+    return;
+  }
+
+  const touch = event.touches[0];
+  const deltaX = touch.clientX - state.modalSwipe.startX;
+  const deltaY = touch.clientY - state.modalSwipe.startY;
+
+  if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 8) {
+    event.preventDefault();
+    state.modalSwipe.currentX = touch.clientX;
+  }
+}
+
+function handleModalSwipeEnd(event) {
+  if (!state.modalSwipe.active) {
+    return;
+  }
+
+  const touch = event.changedTouches && event.changedTouches[0];
+  const endX = touch ? touch.clientX : state.modalSwipe.currentX;
+  const endY = touch ? touch.clientY : state.modalSwipe.startY;
+  const deltaX = endX - state.modalSwipe.startX;
+  const deltaY = endY - state.modalSwipe.startY;
+  state.modalSwipe.active = false;
+
+  if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+    return;
+  }
+
+  moveEventSlide(deltaX < 0 ? 1 : -1);
+}
+
+function handleModalSwipeCancel() {
+  state.modalSwipe.active = false;
 }
 
 function detailItem(label, value) {
@@ -997,7 +1310,14 @@ function detailItem(label, value) {
 }
 
 function showEventForm(event) {
+  const previousModalDate = state.modalDate;
   state.modalEvent = event.id ? event : null;
+  state.modalDate = event.event_date || state.modalDate;
+  if (event.id && !state.modalEvents.length) {
+    state.modalEvents = [event];
+  } else if (!event.id && previousModalDate !== event.event_date) {
+    state.modalEvents = [];
+  }
   state.modalMode = event.id ? "edit" : "create";
   els.eventDetails.hidden = true;
   els.eventForm.hidden = false;
@@ -1024,23 +1344,74 @@ function showEventForm(event) {
   fields.event_name.focus();
 }
 
-async function handleModalAction(action, event) {
+function blankEventForDate(dateKey) {
+  return {
+    event_date: dateKey,
+    event_name: "",
+    start_time: "",
+    end_time: "",
+    location: "",
+    contact_person: "",
+    phone: "",
+    description: "",
+    flyer_path: ""
+  };
+}
+
+function canAddEventsToDate() {
+  return Boolean(state.user && state.user.role === "user" && state.user.status === "approved");
+}
+
+function returnToModalView() {
+  if (state.modalEvents.length > 1) {
+    showEventCarousel(state.modalEvents, state.modalDate, state.modalSlideIndex);
+    return;
+  }
+
+  if (state.modalEvents.length === 1) {
+    showEventDetails(state.modalEvents[0]);
+    return;
+  }
+
+  if (state.modalEvent) {
+    showEventDetails(state.modalEvent);
+    return;
+  }
+
+  closeModal();
+}
+
+async function handleModalAction(action, event, options = {}) {
   if (action === "close") {
     closeModal();
     return;
   }
 
+  if (action === "add-another") {
+    showEventForm(blankEventForDate(options.date || (event && event.event_date) || state.modalDate));
+    return;
+  }
+
   if (action === "edit") {
+    if (!event) {
+      return;
+    }
     showEventForm(event);
     return;
   }
 
   if (action === "flyer") {
-    openFlyerLightbox(event.flyer_path, event.event_name);
+    if (!event) {
+      return;
+    }
+    openFlyerLightbox(eventFlyerPath(event), event.event_name);
     return;
   }
 
   if (action === "delete") {
+    if (!event) {
+      return;
+    }
     await deleteEvent(event.id);
   }
 }
@@ -1104,6 +1475,10 @@ function closeModal() {
   els.eventDetails.innerHTML = "";
   els.eventForm.reset();
   state.modalEvent = null;
+  state.modalEvents = [];
+  state.modalDate = null;
+  state.modalSlideIndex = 0;
+  state.modalSwipe.active = false;
   state.modalMode = "view";
 }
 
