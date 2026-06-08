@@ -105,6 +105,7 @@ function eventSelectSql() {
     SELECT
       events.*,
       users.organization_name,
+      users.logo_path AS organization_logo_path,
       users.logo_path
     FROM events
     JOIN users ON users.id = events.user_id
@@ -202,10 +203,6 @@ function createEvent(req, res) {
     return res.status(201).json({ event, message: "Datum je uspešno rezervisan." });
   } catch (err) {
     deleteUploadedFile(flyerPath);
-    if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      return res.status(409).json({ message: "Ovaj datum je već rezervisan." });
-    }
-
     throw err;
   }
 }
@@ -278,10 +275,6 @@ function updateEvent(req, res) {
     return res.json({ event, message: "Događaj je uspešno izmenjen." });
   } catch (err) {
     deleteUploadedFile(newFlyerPath);
-    if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      return res.status(409).json({ message: "Ovaj datum je već rezervisan." });
-    }
-
     throw err;
   }
 }

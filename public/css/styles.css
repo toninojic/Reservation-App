@@ -674,6 +674,15 @@ textarea {
   border: 1px solid rgba(234, 223, 206, 0.9);
 }
 
+.event-thumb--placeholder {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent-soft), var(--sand));
+  color: var(--accent-dark);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .event-title {
   display: -webkit-box;
   min-width: 0;
@@ -1997,6 +2006,10 @@ input[type="file"] {
   background: rgba(184, 177, 217, 0.26);
 }
 
+.calendar-legend span:nth-child(6) {
+  background: rgba(201, 123, 99, 0.16);
+}
+
 .calendar-panel {
   background: #ffffff;
 }
@@ -2079,6 +2092,13 @@ input[type="file"] {
   background: var(--status-other);
   box-shadow:
     0 0 0 3px rgba(184, 177, 217, 0.3),
+    0 2px 7px rgba(38, 51, 45, 0.16);
+}
+
+.status-dot--multiple {
+  background: var(--terracotta);
+  box-shadow:
+    0 0 0 3px rgba(201, 123, 99, 0.24),
     0 2px 7px rgba(38, 51, 45, 0.16);
 }
 
@@ -2179,6 +2199,164 @@ tr {
 .public-lock-message {
   color: var(--ink);
   font-weight: 700;
+}
+
+.day-cell.is-multiple {
+  border-color: rgba(201, 123, 99, 0.48);
+  background:
+    linear-gradient(135deg, rgba(201, 123, 99, 0.14), transparent 42%),
+    linear-gradient(180deg, #ffffff, var(--reserved-soft));
+}
+
+.day-cell.is-multiple:not(.is-own) .day-number {
+  color: #7d4132;
+  background: var(--terracotta-soft);
+}
+
+.event-preview--multiple {
+  align-self: end;
+  gap: 9px;
+  margin-top: auto;
+}
+
+.event-avatar-group {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding-left: 2px;
+}
+
+.event-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-left: -8px;
+  overflow: hidden;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--gold-soft), var(--sky-soft));
+  color: var(--accent-dark);
+  box-shadow: 0 7px 15px rgba(38, 51, 45, 0.12);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.event-avatar:first-child {
+  margin-left: 0;
+}
+
+.event-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.event-avatar--initials {
+  background: linear-gradient(135deg, var(--accent-soft), var(--sand));
+}
+
+.event-avatar--more {
+  background: var(--topbar);
+  color: #ffffff;
+}
+
+.event-count-label {
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #7d4132;
+  box-shadow: inset 0 0 0 1px rgba(201, 123, 99, 0.18);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.event-carousel {
+  display: grid;
+  gap: 14px;
+}
+
+.carousel-shell {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.carousel-viewport {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  touch-action: pan-y;
+}
+
+.carousel-track {
+  display: block;
+}
+
+.carousel-slide {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 15px;
+  padding: 1px;
+}
+
+.carousel-slide[hidden] {
+  display: none;
+}
+
+.carousel-arrow {
+  width: 44px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(229, 234, 241, 0.95);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent-dark);
+  box-shadow: var(--shadow-tight);
+  font-size: 2rem;
+  line-height: 1;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.carousel-arrow:not(:disabled):hover {
+  border-color: rgba(201, 123, 99, 0.34);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(201, 123, 99, 0.1);
+}
+
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(175, 199, 213, 0.62);
+}
+
+.carousel-dot.is-active {
+  width: 24px;
+  background: var(--terracotta);
+}
+
+.carousel-actions {
+  justify-content: center;
 }
 
 @media (max-width: 1120px) {
@@ -2342,5 +2520,38 @@ tr {
 
   .legend-accordion[open] .legend-content {
     padding: 0 13px 13px;
+  }
+
+  .event-avatar {
+    width: 26px;
+    height: 26px;
+    margin-left: -7px;
+    font-size: 0.6rem;
+  }
+
+  .event-avatar-group {
+    min-height: 28px;
+  }
+
+  .event-count-label {
+    padding: 3px 7px;
+    font-size: 0.7rem;
+  }
+
+  .carousel-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .carousel-arrow {
+    display: none;
+  }
+
+  .carousel-viewport {
+    touch-action: pan-y;
+  }
+
+  .carousel-actions {
+    display: grid;
+    justify-content: stretch;
   }
 }
